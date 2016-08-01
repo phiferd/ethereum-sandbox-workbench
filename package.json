@@ -1,0 +1,17 @@
+{
+  "name": "ethereum-sandbox-workbench",
+  "version": "0.1.0",
+  "description": "",
+  "main": "workbench.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ether-pudding": "^3.1.2",
+    "ethereum-sandbox-client": "^1.0.0-beta3",
+    "ethereum-sandbox-helper": "^1.0.0-beta3",
+    "mocha": "^3.0.0"
+  }
+}
