@@ -1,10 +1,13 @@
+var path = require('path');
+
 var Pudding = require('ether-pudding');
 var Sandbox = require('ethereum-sandbox-client');
 var helper = require('ethereum-sandbox-helper');
 
-var Workbench = function() {
+var Workbench = function(defaults) {
   this.sandbox = new Sandbox('http://localhost:8554');
   this.readyContracts = {};
+  this.defaults = defaults;
 };
 
 Workbench.prototype.compile = function(contracts, dir, cb) {
@@ -24,9 +27,11 @@ Workbench.prototype.compile = function(contracts, dir, cb) {
 
 Workbench.prototype.start = function(contracts, cb) {
   var self = this;
-  this.sandbox.start(__dirname + '/ethereum.json', function () {
+  this.sandbox.start(path.dirname(module.parent.filename) + '/ethereum.json', function (err) {
+    if (err) return cb(err);
     Object.keys(contracts).forEach(contractName => {
       contracts[contractName].setProvider(self.sandbox.web3.currentProvider);
+      if (self.defaults) contracts[contractName].defaults(self.defaults);
     });
     cb();
   });
@@ -72,6 +77,16 @@ Workbench.prototype.waitForReceipt = function (txHash) {
           if (eventLog.parsed) break;
         }
       });
+      return resolve(receipt);
+    });
+  });
+};
+
+Workbench.prototype.waitForSandboxReceipt = function (txHash) {
+  var self = this;
+  return new Promise((resolve, reject) => {
+    helper.waitForSandboxReceipt(self.sandbox.web3, txHash, function (err, receipt) {
+      if (err) return reject(err);
       return resolve(receipt);
     });
   });
