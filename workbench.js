@@ -1,6 +1,7 @@
 var path = require('path');
 var fs = require('fs');
 
+var callsite = require('callsite');
 var Pudding = require('ether-pudding');
 var Sandbox = require('ethereum-sandbox-client');
 var helper = require('ethereum-sandbox-helper');
@@ -8,7 +9,6 @@ var helper = require('ethereum-sandbox-helper');
 function configureState(options, ethereumJsonPath) {
   var state;
   if (options.initialState) {
-    console.log('Using initialState from options');
     state = {
       contracts: 'contracts',
       env: options.initialState
@@ -17,7 +17,6 @@ function configureState(options, ethereumJsonPath) {
   }
 
   if (!fs.existsSync(ethereumJsonPath)) {
-    console.log('Ethereum json doesn\'t exist, generating');
     var defaultAccount = '0xcd2a3d9f938e13cd947ec05abc7fe734df8dd826';
     if (options.defaults && options.defaults.from) defaultAccount = options.defaults.from;
     state = {
@@ -49,7 +48,7 @@ var Workbench = function(options) {
   if (!options) options = {};
   this.defaults = options.defaults;
   this.contractsDirectory = options.contratcsDirectory;
-  this.ethereumJsonPath = path.dirname(module.parent.filename) + '/ethereum.json';
+  this.ethereumJsonPath = path.dirname(callsite()[1].getFileName()) + '/ethereum.json';
   if (options.ethereumJsonPath) this.ethereumJsonPath = options.ethereumJsonPath;
   configureState(options, this.ethereumJsonPath);
 };
