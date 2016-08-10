@@ -22,6 +22,10 @@ var callsite = require('callsite');
 var Pudding = require('ether-pudding');
 var Sandbox = require('ethereum-sandbox-client');
 var helper = require('ethereum-sandbox-helper');
+var SolidityFunction = require("web3/lib/web3/function.js");
+var coder = require('web3/lib/solidity/coder');
+
+var proxyContractName = 'Proxy';
 
 function configureState(options, ethereumJsonPath) {
   var state;
@@ -72,6 +76,9 @@ var Workbench = function(options) {
 
 Workbench.prototype.compile = function(contracts, dir, cb) {
   var output = helper.compile(dir, contracts);
+  var proxyOutput = helper.compile(__dirname, [proxyContractName + '.sol']);
+  Object.assign(output.contracts, proxyOutput.contracts);
+  Object.assign(output.sources, proxyOutput.sources);
   var ready = {};
   Object.keys(output.contracts).forEach(contractName => {
     var contract = output.contracts[contractName];
@@ -101,14 +108,99 @@ Workbench.prototype.stop = function(cb) {
   this.sandbox.stop(cb);
 };
 
+function setupMockOnContract(contract) {
+  var self = this;
+  contract.newMock = function(options) {
+    return self.readyContracts[proxyContractName].new((options && options.traceFunctionCalls) || false)
+    .then(function(proxyContract) {
+      if (proxyContract.address) {
+        var proxyContractMock = contract.at(proxyContract.address);
+        proxyContractMock.abi.forEach(obj => {
+          if (obj.type === 'function') {
+            var func = new SolidityFunction(null, obj, null);
+            proxyContractMock[obj.name].mockCallReturnValue = function(returnValue, onArgs) {
+              var encoded = coder.encodeParams([obj.outputs[0].type], [returnValue]);
+              var promise;
+              if (onArgs) {
+                var encodedInput = coder.encodeParams(obj.inputs.map(x => x.type), onArgs);
+                promise = proxyContract.setMockWithArgs('0x' + func.signature() + encodedInput, 2, '0x0', '0x' + encoded, {gas: 500000})
+              } else {
+                promise = proxyContract.setMock('0x' + func.signature(), 2, '0x0', '0x' + encoded, {gas: 500000})
+              }
+              return promise
+              .then(function(txHash) {
+                return self.waitForReceipt(txHash);
+              });
+            };
+            proxyContractMock[obj.name].mockTransactionForward = function(address, options, onArgs) {
+              var data;
+              if (options.data) {
+                data = options.data;
+              } else {
+                var funcAbi;
+                options.contract.abi.forEach(abiFunc => {
+                  if (options.functionName === abiFunc.name) {
+                    funcAbi = abiFunc;
+                  }
+                });
+                var funcForForward = new SolidityFunction(null, funcAbi, null);
+                data = funcForForward.toPayload(options.args).data;
+              }
+              var promise;
+              if (onArgs) {
+                var encodedInput = coder.encodeParams(obj.inputs.map(x => x.type), onArgs);
+                promise = proxyContract.setMockWithArgs('0x' + func.signature() + encodedInput, 1, address, data, {gas: 500000})
+              } else {
+                promise = proxyContract.setMock('0x' + func.signature(), 1, address, data, {gas: 500000})
+              }
+
+              return promise
+              .then(function(txHash) {
+                return self.waitForReceipt(txHash);
+              });
+            };
+
+            proxyContractMock[obj.name].wasCalled = function(receipt) {
+              var called = false;
+              var retArgs;
+              receipt.logs.forEach(eventLog => {
+                if (eventLog.parsed && eventLog.parsed.event == 'Trace') {
+                  var funcSig = '0x' + func.signature();
+                  var parsedArgs = eventLog.parsed.args;
+                  if (parsedArgs.data.startsWith(funcSig)) {
+                    called = true;
+                    retArgs = coder.decodeParams(obj.inputs.map(x => x.type), parsedArgs.data.replace(funcSig, ''));
+                  }
+                }
+              });
+              return {
+                called: called,
+                args: retArgs
+              };
+            };
+          }
+        });
+        return proxyContractMock;
+      } else {
+        throw new Error('No address for proxy contract');
+      }
+    });
+  };
+};
+
 Workbench.prototype.startTesting = function(contracts, cb) {
   var self = this;
+
   if (typeof contracts === 'string') contracts = [contracts];
   contracts = contracts.map(x => x + '.sol');
   var dir = this.contractsDirectory;
   if (!dir) dir = './contract';
 
   this.readyContracts = this.compile(contracts, dir);
+  Object.keys(this.readyContracts).forEach(contractName => {
+    var contract = this.readyContracts[contractName];
+    setupMockOnContract.bind(this)(contract);
+  });
 
   var name = '[' + contracts.join(', ') + '] Contracts Testing';
   describe(name, function() {
@@ -155,6 +247,16 @@ Workbench.prototype.sendTransaction = function (options) {
     return self.sandbox.web3.eth.sendTransaction(options, function (err, txHash) {
       if (err) return reject(err);
       return resolve(txHash);
+    });
+  });
+};
+
+Workbench.prototype.call = function (options) {
+  var self = this;
+  return new Promise((resolve, reject) => {
+    return self.sandbox.web3.eth.call(options, function (err, result) {
+      if (err) return reject(err);
+      return resolve(result);
     });
   });
 };
