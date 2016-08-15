@@ -31,7 +31,7 @@ contract Proxy {
 
     if (operationType == 1) {
       address target = operation.target;
-      target.call(operation.data);
+      var retVal = target.call(operation.data);
     } else if (operationType == 2) {
       bytes memory data = operation.data;
       assembly {
