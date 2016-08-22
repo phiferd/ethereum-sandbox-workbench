@@ -17,11 +17,32 @@
 
 var Module = require('module');
 var vm = require('vm');
+if (typeof it !== 'undefined') {
+  var originalIt = it;
+  var patchFunc = function(func) {
+    var patched = function(description, cb) {
+      if (typeof cb === 'undefined') return func(description);
+      if (cb.length > 0) console.log('ERROR: it callback should not have parameters, this could lead to unexpected behaviour');
+      return func(description, function() {
+        var result;
+        result = cb();
+        if (typeof result === 'undefined') {
+          throw new Error('ERROR: it callback did not return promise');
+        }
+        return result;
+      });
+    };
+    return patched;
+  };
+  it = patchFunc(originalIt);
+  it.only = patchFunc(originalIt.only);
+  it.skip = patchFunc(originalIt.skip);
+}
 Promise.prototype['originalThen'] = Promise.prototype.then;
 Promise.prototype['then'] = function() {
   var resultCheckerFunc = function(result) {
     if (typeof result === 'undefined')
-      console.log("WARNING: result from promise was undefined");
+      console.log('WARNING: result from promise was undefined');
     return result;
   };
   if (typeof arguments[1] === 'function') {
