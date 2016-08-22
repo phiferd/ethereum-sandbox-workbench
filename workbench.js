@@ -22,6 +22,7 @@ if (typeof it !== 'undefined') {
   var patchFunc = function(func) {
     var patched = function(description, cb) {
       if (typeof cb === 'undefined') return func(description);
+      if (cb.length > 0) console.log('ERROR: it callback should not have parameters, this could lead to unexpected behaviour');
       return func(description, function() {
         var result;
         result = cb();
