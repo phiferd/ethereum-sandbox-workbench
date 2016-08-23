@@ -138,7 +138,7 @@ var Workbench = function(options) {
   this.readyContracts = {};
   if (!options) options = {};
   this.defaults = options.defaults;
-  this.contractsDirectory = options.contratcsDirectory;
+  this.contractsDirectory = options.contractsDirectory;
   this.ethereumJsonPath = path.dirname(callsite()[1].getFileName()) + '/ethereum.json';
   if (options.ethereumJsonPath) this.ethereumJsonPath = options.ethereumJsonPath;
   configureState(options, this.ethereumJsonPath);
